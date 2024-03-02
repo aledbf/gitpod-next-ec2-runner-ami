@@ -92,10 +92,16 @@ build {
     source      = "${path.root}/scripts/"
   }
 
+  provisioner "file" {
+    destination = "/tmp/devcontainer-seed-images.txt"
+    source      = "${path.root}/devcontainer-seed-images.txt"
+  }
+
   provisioner "shell" {
     inline = [
       "sudo bash -c 'chmod +x /tmp/scripts/*.sh'",
-      "sudo -E bash -c /tmp/scripts/bootstrap.sh",
+      "sudo -E bash -c /tmp/scripts/setup.sh",
+      "sudo -E bash -c /tmp/scripts/seed-images.sh",
       "sleep 10",
       "sudo reboot --force"
     ]

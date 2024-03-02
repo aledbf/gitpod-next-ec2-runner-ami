@@ -1,0 +1,45 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-symlinks
+      - id: mixed-line-ending
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+        types: [shell]
+      - id: check-merge-conflict
+  - repo: https://github.com/gitpod-io/pre-commit-hooks
+    rev: 2.1.5
+    hooks:
+      - id: shellcheck
+        args: [-e, "SC1090,SC1091,SC2155"]
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.7.0-4
+    hooks:
+      - id: shfmt
+        args: [-w, -i, "0", -s]
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.33.0
+    hooks:
+      - id: yamllint
+        args: [-c=.yamllint.yaml]
+  - repo: https://github.com/zricethezav/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        verbose: true
+        args:
+          - --ignore=DL3008
+          - --ignore=DL3006
+          - --ignore=DL3002
+          - --ignore=DL4006
+          - --ignore=DL3015

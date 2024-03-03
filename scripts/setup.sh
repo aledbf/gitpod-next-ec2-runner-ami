@@ -31,7 +31,6 @@ function install_packages {
 		binutils binfmt-support \
 		linux-base \
 		wireless-regdb \
-		avahi-daemon \
 		util-linux-extra \
 		awscli
 }

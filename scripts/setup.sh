@@ -83,6 +83,7 @@ function install_docker {
 }
 EOF
 
+	systemctl restart docker
 }
 
 function change_systemd_target {

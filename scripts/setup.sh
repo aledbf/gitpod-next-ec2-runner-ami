@@ -385,6 +385,15 @@ function network_manager {
 network: {config: disabled}
 EOF
 
+	cat <<'EOF' >/etc/cloud/cloud.cfg.d/99-ssh.cfg
+ssh_genkeytypes: [ed25519]
+allow_public_ssh_keys: true
+ssh_quiet_keygen: true
+no_ssh_fingerprints: true
+ssh:
+  emit_keys_to_console: false
+EOF
+
 	cat <<'EOF' >/etc/netplan/01-network-manager-all.yaml
 network:
   version: 2

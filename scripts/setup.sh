@@ -73,11 +73,14 @@ function install_docker {
 	"live-restore": false,
 	"default-shm-size": "128M",
 	"exec-opts": [
-  	  "native.cgroupdriver=systemd"
+		"native.cgroupdriver=systemd"
 	],
 	"dns-opts": [
-      "timeout:5"
-	]
+		"timeout:5"
+	],
+	"features": {
+    	"containerd-snapshotter": true
+  	}
 }
 EOF
 

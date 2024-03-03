@@ -47,24 +47,34 @@ locals {
 }
 
 source "amazon-ebs" "linux" {
-  region        = var.aws_region
-  ami_name      = var.ami_name
-  instance_type = "m5.large"
-
-  boot_mode = "legacy-bios"
-  ami_virtualization_type = "hvm"
-  associate_public_ip_address = true
-  ebs_optimized = true
-  ena_support = true
-
   source_ami_filter {
     filters = {
-      name                = "*/ubuntu-jammy-23.10-amd64-server-*"
+      name                = "*/ubuntu-mantic-23.10-amd64-server-*"
       root-device-type    = "ebs"
       virtualization-type = "hvm"
     }
     most_recent = true
     owners      = ["099720109477"]
+  }
+
+  region        = var.ami_region
+  ami_name      = var.ami_name
+  instance_type = "m5.xlarge"
+
+  ami_virtualization_type = "hvm"
+  associate_public_ip_address = true
+  ebs_optimized = true
+  ena_support = true
+
+  launch_block_device_mappings {
+    device_name = "/dev/sda1"
+    volume_size = 20
+    volume_type = "gp3"
+
+    iops = "3000"
+    throughput = "250"
+
+    delete_on_termination = true
   }
 
   tags          = "${local.tags}"
@@ -102,6 +112,7 @@ build {
       "sudo bash -c 'chmod +x /tmp/scripts/*.sh'",
       "sudo -E bash -c /tmp/scripts/setup.sh",
       "sudo -E bash -c /tmp/scripts/seed-images.sh",
+      "sudo -E bash -c /tmp/scripts/cleanup.sh",
       "sleep 10",
       "sudo reboot --force"
     ]
@@ -113,6 +124,7 @@ build {
   # record and initial configuration are ok
   provisioner "shell" {
     inline = [
+      "sudo touch /fastboot",
       "echo done"
     ]
   }

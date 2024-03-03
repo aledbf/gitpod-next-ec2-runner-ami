@@ -1,4 +1,7 @@
+mcr.microsoft.com/devcontainers/base
 mcr.microsoft.com/devcontainers/go
+mcr.microsoft.com/devcontainers/go:1.21
+mcr.microsoft.com/devcontainers/go:1.22
 mcr.microsoft.com/devcontainers/python
 mcr.microsoft.com/devcontainers/java
 mcr.microsoft.com/devcontainers/javascript-node

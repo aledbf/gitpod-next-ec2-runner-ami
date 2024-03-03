@@ -84,6 +84,52 @@ function install_docker {
 EOF
 
 	systemctl restart docker
+
+	cat <<'EOF' >>/etc/containerd/config.toml
+[plugins]
+  [plugins."io.containerd.gc.v1.scheduler"]
+    pause_threshold = 0.02
+    deletion_threshold = 0
+    mutation_threshold = 100
+    schedule_delay = "60s"
+    # https://github.com/containerd/containerd/blob/main/docs/garbage-collection.md#configuration-parameters
+    # the default value is 100ms, meaning the gc will impact the boot performance. Delay the start for five minutes
+    startup_delay = "300s"
+EOF
+
+	cat <<'EOF' >>/etc/systemd/system/containerd.service
+[Unit]
+Description=containerd container runtime
+Documentation=https://containerd.io
+After=network.target local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+ExecStartPre=-/sbin/modprobe overlay
+ExecStart=/usr/bin/containerd
+
+Type=notify
+Delegate=yes
+KillMode=process
+Restart=always
+RestartSec=1
+# Having non-zero Limit*s causes performance problems due to accounting overhead
+# in the kernel. We recommend using cgroups to do container-local accounting.
+LimitNPROC=infinity
+LimitCORE=infinity
+LimitNOFILE=infinity
+# Comment TasksMax if your systemd version does not supports it.
+# Only systemd 226 and above support this version.
+TasksMax=infinity
+OOMScoreAdjust=-999
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+	rm /lib/systemd/system/containerd.service
+	systemctl daemon-reload
+	systemctl restart containerd
 }
 
 function change_systemd_target {
@@ -130,11 +176,12 @@ function disable_systemd_services {
 		ua-timer.timer
 		ubuntu-advantage.service
 		unattended-upgrades.service
+		snap.lxd.activate.service
 	)
 	# shellcheck disable=SC2048
 	for SERVICE in ${SERVICES_TO_DISABLE[*]}; do
-		systemctl stop "${SERVICE}" || true
-		systemctl disable "${SERVICE}" || true
+		systemctl stop "${SERVICE}" >/dev/null 2>&1 || true
+		systemctl disable "${SERVICE}" >/dev/null 2>&1 || true
 	done
 
 	rm -f /etc/systemd/system/timers.target.wants/*

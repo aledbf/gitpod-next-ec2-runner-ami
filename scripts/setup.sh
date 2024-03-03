@@ -18,9 +18,40 @@ EOF
 
 	cat <<'EOF' >/etc/cloud/cloud.cfg.d/99-base.cfg
 resize_rootfs: noblock
+apt_update: false
 apt_preserve_sources_list: True
 grub_dpkg:
   enabled: false
+
+datasource_list: [Ec2]
+
+cloud_init_modules:
+  - migrator
+  - seed_random
+  - bootcmd
+  - write-files
+  - growpart
+  - resizefs
+  - disk_setup
+  - mounts
+  - set_hostname
+  - update_hostname
+  - update_etc_hosts
+  - ca-certs
+  - rsyslog
+  - users-groups
+  - ssh
+
+cloud_config_modules:
+  - ubuntu_autoinstall
+  - keyboard
+  - locale
+  - set-passwords
+  - ntp
+  - timezone
+  - runcmd
+  - byobu
+
 EOF
 }
 
@@ -184,7 +215,6 @@ function disable_systemd_services {
 		ua-timer.timer
 		ubuntu-advantage.service
 		unattended-upgrades.service
-		snap.lxd.activate.service
 		vgauth.service
 		open-vm-tools.service
 		wpa_supplicant.service
@@ -194,6 +224,8 @@ function disable_systemd_services {
 		systemctl stop "${SERVICE}" >/dev/null 2>&1 || true
 		systemctl disable "${SERVICE}" >/dev/null 2>&1 || true
 	done
+
+	systemctl mask wpa_supplicant.service
 
 	rm -f /etc/systemd/system/timers.target.wants/*
 	rm -f /etc/systemd/system/sysinit.target.wants/atop*
@@ -428,6 +460,45 @@ iface lo inet loopback
 EOF
 }
 
+function adjust_timesync {
+	cat <<'EOF' >/etc/chrony/chrony.conf
+# This directive specify the location of the file containing ID/key pairs for NTP authentication.
+keyfile /etc/chrony/chrony.keys
+# Record the rate at which the system clock gains/losses time.
+driftfile /var/lib/chrony/chrony.drift
+# Allow the system clock to be stepped in the first three updates if its offset is larger than 1 second.
+makestep 1.0 3
+# Stop bad estimates upsetting machine clock.
+maxupdateskew 100.0
+# Enable kernel synchronization of the real-time clock (RTC).
+rtcsync
+# Specify directory for log files.
+logdir /var/log/chrony
+# Select which information is logged.
+log measurements statistics tracking
+
+# https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-time.html
+# use link local ntp time
+server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4
+pool time.aws.com iburst
+
+EOF
+}
+
+function cache_apparmor_profiles {
+	echo "write-cache" >>/etc/apparmor/parser.conf
+}
+
+function adjust_journald {
+	cat <<'EOF' >/etc/systemd/journald.conf
+[Journal]
+Storage=volatile
+SystemMaxUse=50M
+MaxFileSec=1year
+ForwardToSyslog=no
+EOF
+}
+
 update_apt_sources
 install_packages
 install_git
@@ -443,3 +514,6 @@ adjust_sysctl
 configure_git
 adjust_boot
 remove_snapd
+adjust_timesync
+cache_apparmor_profiles
+adjust_journald

@@ -15,6 +15,11 @@ deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu/ mantic-updates main restri
 deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu/ mantic-backports main restricted universe multiverse
 deb [arch=amd64] http://security.ubuntu.com/ubuntu mantic-security main restricted universe multiverse
 EOF
+
+	cat <<'EOF' >/etc/cloud/cloud.cfg.d/10_rackspace.cfg
+resize_rootfs: noblock
+apt_preserve_sources_list: True
+EOF
 }
 
 function install_packages {
@@ -177,6 +182,9 @@ function disable_systemd_services {
 		ubuntu-advantage.service
 		unattended-upgrades.service
 		snap.lxd.activate.service
+		vgauth.service
+		open-vm-tools.service
+		wpa_supplicant.service
 	)
 	# shellcheck disable=SC2048
 	for SERVICE in ${SERVICES_TO_DISABLE[*]}; do
@@ -404,6 +412,12 @@ network:
 EOF
 
 	chmod 0600 /etc/netplan/01-network-manager-all.yaml
+
+	cat <<'EOF' >/etc/network/interfaces
+auto lo
+iface lo inet loopback
+EOF
+
 }
 
 update_apt_sources

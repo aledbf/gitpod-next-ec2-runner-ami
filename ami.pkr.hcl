@@ -124,7 +124,6 @@ build {
   # record and initial configuration are ok
   provisioner "shell" {
     inline = [
-      "sudo touch /fastboot",
       "echo done"
     ]
   }

@@ -9,7 +9,8 @@ rm -rf \
 	/var/log/journal/* \
 	/var/cache/debconf/* \
 	/var/lib/apt/lists/* \
-	/var/tmp/*
+	/var/tmp/* \
+	/etc/apparmor.d/usr.lib.snapd.snap-confine.real
 
 apt-get clean -y
 

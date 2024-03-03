@@ -39,6 +39,7 @@ function install_packages {
 		linux-base \
 		wireless-regdb \
 		util-linux-extra \
+		nscd \
 		awscli
 }
 
@@ -348,8 +349,14 @@ function adjust_boot {
 }
 
 function remove_snapd {
-	snap remove amazon-ssm-agent
-	apt remove -y snapd
+	snap list --all | awk '/disabled/{print $1, $3}' |
+		while read -r snapname revision; do
+			snap remove "$snapname" --revision="$revision"
+		done
+
+	apt autoremove --purge snapd
+	apt-mark hold snapd
+	rm -rf /root/snap
 
 	# https://docs.aws.amazon.com/systems-manager/latest/userguide/agent-install-ubuntu-64-snap.html
 	wget --quiet https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb

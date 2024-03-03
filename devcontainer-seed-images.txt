@@ -5,9 +5,4 @@ mcr.microsoft.com/devcontainers/go:1.22
 mcr.microsoft.com/devcontainers/python
 mcr.microsoft.com/devcontainers/java
 mcr.microsoft.com/devcontainers/javascript-node
-mcr.microsoft.com/devcontainers/ruby
-mcr.microsoft.com/devcontainers/cpp
-mcr.microsoft.com/devcontainers/dotnet
-mcr.microsoft.com/devcontainers/php
-mcr.microsoft.com/devcontainers/rust
 mcr.microsoft.com/devcontainers/typescript-node

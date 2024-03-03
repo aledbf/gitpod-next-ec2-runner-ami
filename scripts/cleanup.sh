@@ -15,7 +15,7 @@ rm -rf \
 apt-get clean -y
 
 # disable docker service and rely on the docker socket for activation
-systemctl disable docker.service
+#systemctl disable docker.service
 
 systemctl stop systemd-resolved
 systemctl mask systemd-resolved.service

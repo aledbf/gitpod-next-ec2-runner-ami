@@ -487,6 +487,8 @@ EOF
 
 function cache_apparmor_profiles {
 	echo "write-cache" >>/etc/apparmor/parser.conf
+	systemctl restart apparmor
+	systemctl disable apparmor
 }
 
 function adjust_journald {

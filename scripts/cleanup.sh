@@ -17,5 +17,17 @@ apt-get clean -y
 # disable docker service and rely on the docker socket for activation
 systemctl disable docker.service
 
-journalctl --flush --rotate --vacuum-time=1s
-journalctl --user --flush --rotate --vacuum-time=1s
+systemctl stop systemd-resolved
+systemctl mask systemd-resolved.service
+
+# ensure we use systemd-resolved configuration (DHCP)
+rm -f /etc/resolv.conf
+
+ln -s /run/NetworkManager/no-stub-resolv.conf /etc/resolv.conf
+
+journalctl --rotate || true
+journalctl --vacuum-time=1s || true
+
+rm -rf /var/log/journal/*
+
+sync

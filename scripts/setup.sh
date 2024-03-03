@@ -354,7 +354,7 @@ function remove_snapd {
 			snap remove "$snapname" --revision="$revision"
 		done
 
-	apt autoremove --purge snapd
+	apt autoremove --yes --purge snapd
 	apt-mark hold snapd
 	rm -rf /root/snap
 
@@ -426,7 +426,6 @@ EOF
 auto lo
 iface lo inet loopback
 EOF
-
 }
 
 update_apt_sources

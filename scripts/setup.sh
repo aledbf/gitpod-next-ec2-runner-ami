@@ -16,9 +16,11 @@ deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu/ mantic-backports main rest
 deb [arch=amd64] http://security.ubuntu.com/ubuntu mantic-security main restricted universe multiverse
 EOF
 
-	cat <<'EOF' >/etc/cloud/cloud.cfg.d/10_rackspace.cfg
+	cat <<'EOF' >/etc/cloud/cloud.cfg.d/99-base.cfg
 resize_rootfs: noblock
 apt_preserve_sources_list: True
+grub_dpkg:
+  enabled: false
 EOF
 }
 

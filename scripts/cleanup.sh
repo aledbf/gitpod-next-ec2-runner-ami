@@ -15,3 +15,6 @@ apt-get clean -y
 
 # disable docker service and rely on the docker socket for activation
 systemctl disable docker.service
+
+journalctl --flush --rotate --vacuum-time=1s
+journalctl --user --flush --rotate --vacuum-time=1s

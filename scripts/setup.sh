@@ -15,44 +15,6 @@ deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu/ mantic-updates main restri
 deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu/ mantic-backports main restricted universe multiverse
 deb [arch=amd64] http://security.ubuntu.com/ubuntu mantic-security main restricted universe multiverse
 EOF
-
-	cat <<'EOF' >/etc/cloud/cloud.cfg.d/99-base.cfg
-resize_rootfs: noblock
-apt_update: false
-apt_preserve_sources_list: True
-grub_dpkg:
-  enabled: false
-
-datasource_list: [Ec2]
-
-cloud_init_modules:
-  - migrator
-  - seed_random
-  - bootcmd
-  - write-files
-  - growpart
-  - resizefs
-  - disk_setup
-  - mounts
-  - set_hostname
-  - update_hostname
-  - update_etc_hosts
-  - ca-certs
-  - rsyslog
-  - users-groups
-  - ssh
-
-cloud_config_modules:
-  - ubuntu_autoinstall
-  - keyboard
-  - locale
-  - set-passwords
-  - ntp
-  - timezone
-  - runcmd
-  - byobu
-
-EOF
 }
 
 function install_packages {
@@ -66,7 +28,6 @@ function install_packages {
 		git \
 		zip unzip bzip2 pigz xz-utils zstd \
 		software-properties-common \
-		binutils binfmt-support \
 		linux-base \
 		wireless-regdb \
 		util-linux-extra \
@@ -100,29 +61,7 @@ function install_docker {
 	# avoid nftables issues (docker)
 	update-alternatives --set iptables /usr/sbin/iptables-legacy
 
-	cat <<'EOF' >/etc/docker/daemon.json
-{
-	"debug": false,
-	"bip": "172.17.0.1/16",
-	"experimental": true,
-	"max-concurrent-downloads": 10,
-	"max-concurrent-uploads": 10,
-	"max-download-attempts": 10,
-	"live-restore": false,
-	"default-shm-size": "128M",
-	"exec-opts": [
-		"native.cgroupdriver=systemd"
-	],
-	"dns-opts": [
-		"timeout:5"
-	],
-	"features": {
-    	"containerd-snapshotter": true
-  	}
-}
-EOF
-
-	systemctl restart docker
+	cp /tmp/docker-daemon.json /etc/docker/daemon.json
 
 	cat <<'EOF' >>/etc/containerd/config.toml
 [plugins]
@@ -136,39 +75,8 @@ EOF
     startup_delay = "300s"
 EOF
 
-	cat <<'EOF' >>/etc/systemd/system/containerd.service
-[Unit]
-Description=containerd container runtime
-Documentation=https://containerd.io
-After=network.target local-fs.target
-StartLimitIntervalSec=0
-
-[Service]
-ExecStartPre=-/sbin/modprobe overlay
-ExecStart=/usr/bin/containerd
-
-Type=notify
-Delegate=yes
-KillMode=process
-Restart=always
-RestartSec=1
-# Having non-zero Limit*s causes performance problems due to accounting overhead
-# in the kernel. We recommend using cgroups to do container-local accounting.
-LimitNPROC=infinity
-LimitCORE=infinity
-LimitNOFILE=infinity
-# Comment TasksMax if your systemd version does not supports it.
-# Only systemd 226 and above support this version.
-TasksMax=infinity
-OOMScoreAdjust=-999
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-	rm /lib/systemd/system/containerd.service
-	systemctl daemon-reload
 	systemctl restart containerd
+	systemctl restart docker
 }
 
 function change_systemd_target {
@@ -218,14 +126,14 @@ function disable_systemd_services {
 		vgauth.service
 		open-vm-tools.service
 		wpa_supplicant.service
+		lvm2-monitor.service
 	)
 	# shellcheck disable=SC2048
 	for SERVICE in ${SERVICES_TO_DISABLE[*]}; do
 		systemctl stop "${SERVICE}" >/dev/null 2>&1 || true
 		systemctl disable "${SERVICE}" >/dev/null 2>&1 || true
+		systemctl mask "${SERVICE}" >/dev/null 2>&1 || true
 	done
-
-	systemctl mask wpa_supplicant.service
 
 	rm -f /etc/systemd/system/timers.target.wants/*
 	rm -f /etc/systemd/system/sysinit.target.wants/atop*
@@ -262,97 +170,7 @@ function remove_motd {
 }
 
 function adjust_sysctl {
-	# adjust sysctl defaults
-	cat <<'EOF' >/etc/sysctl.d/tuning.conf
-fs.inotify.max_queued_events=16384
-
-kernel.pid_max=4194304
-
-net.nf_conntrack_max=262144
-vm.overcommit_memory=1
-vm.panic_on_oom=0
-
-# https://cloud.google.com/compute/docs/troubleshooting/general-tips#communicatewithinternet
-net.ipv4.tcp_keepalive_time=60
-net.ipv4.tcp_keepalive_intvl=60
-net.ipv4.tcp_keepalive_probes=5
-
-dev.tty.ldisc_autoload=0
-
-# https://nvd.nist.gov/vuln/detail/CVE-2022-4415
-fs.suid_dumpable=0
-
-net.ipv4.conf.all.proxy_arp=1
-net.ipv4.conf.default.proxy_arp=1
-net.ipv4.neigh.default.proxy_delay=0
-
-net.ipv4.ip_forward=1
-net.bridge.bridge-nf-call-iptables=1
-net.bridge.bridge-nf-call-ip6tables=1
-
-# Wait 10 seconds and then reboot
-kernel.panic = 10
-
-# Controls the kernel's behaviour when an oops or BUG is encountered
-kernel.panic_on_oops = 1
-
-# Allow neighbor cache entries to expire even when the cache is not full
-net.ipv4.neigh.default.gc_thresh1 = 0
-net.ipv6.neigh.default.gc_thresh1 = 0
-
-# Avoid neighbor table contention in large subnets
-net.ipv4.neigh.default.gc_thresh2 = 15360
-net.ipv6.neigh.default.gc_thresh2 = 15360
-net.ipv4.neigh.default.gc_thresh3 = 16384
-net.ipv6.neigh.default.gc_thresh3 = 16384
-
-# Increasing to account for skb structure growth since the 3.4.x kernel series
-net.ipv4.tcp_wmem = 4096 20480 4194304
-
-# Bumped the default TTL to 255 (maximum)
-net.ipv4.ip_default_ttl = 255
-
-# Enable IPv4 forwarding for container networking.
-net.ipv4.conf.all.forwarding = 1
-
-# Enable IPv6 forwarding for container networking.
-net.ipv6.conf.all.forwarding = 1
-
-# This is generally considered a safe ephemeral port range
-net.ipv4.ip_local_port_range = 32768 60999
-
-# Connection tracking to prevent dropped connections
-net.netfilter.nf_conntrack_max = 1048576
-net.netfilter.nf_conntrack_generic_timeout = 120
-
-# Enable loose mode for reverse path filter
-net.ipv4.conf.lo.rp_filter = 2
-
-## Kernel hardening settings
-## Settings & descriptions sourced from the KSPP wiki, see
-## https://kernsec.org/wiki/index.php/Kernel_Self_Protection_Project/Recommended_Settings#sysctls
-# Try to keep kernel address exposures out of various /proc files (kallsyms, modules, etc).
-kernel.kptr_restrict = 1
-
-# Avoid kernel memory address exposures via dmesg.
-kernel.dmesg_restrict = 1
-
-# Disable User Namespaces, as it opens up a large attack surface to unprivileged users.
-user.max_user_namespaces = 0
-
-# Turn off unprivileged eBPF access.
-kernel.unprivileged_bpf_disabled = 1
-
-# Turn on BPF JIT hardening, if the JIT is enabled.
-net.core.bpf_jit_harden = 2
-
-# Increase inotify limits to allow for a greater number of containers
-fs.inotify.max_user_instances = 8192
-fs.inotify.max_user_watches = 524288
-
-# Increase virtual memory to allow for larger workloads
-vm.max_map_count = 524288
-EOF
+	cp /tmp/sysctl.conf /etc/sysctl.d/tuning.conf
 }
 
 function configure_git {
@@ -366,16 +184,16 @@ function adjust_boot {
 	# Enable cgroups2
 	sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="systemd.unified_cgroup_hierarchy=1 cgroup_no_v1=all \1"/g' /etc/default/grub
 	# Enable systemd debug logs
-	#sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="systemd.log_level=debug systemd.log_target=console \1"/g' /etc/default/grub
+	# sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="systemd.log_level=debug systemd.log_target=console \1"/g' /etc/default/grub
+	# Quiet boot and systemd console output
+	sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="quiet loglevel=3 systemd.show_status=false rd.udev.log_level=3 \1"/g' /etc/default/grub
 	# Disable dynamic CPU frequency
 	# https://github.com/amzn/amzn-drivers/blob/4b1c5029f391810cf06404d5877a05349e8b72a4/kernel/linux/ena/ENA_Linux_Best_Practices.rst#cpu-power-state
 	sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="clocksource=tsc intel_pstate=disable intel_idle.max_cstate=0 processor.max_cstate=0 \1"/g' /etc/default/grub
 	# Disable audit events
 	sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="audit=0 \1"/g' /etc/default/grub
-	# Quiet boot and systemd console output
-	sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="quiet loglevel=3 systemd.show_status=false rd.udev.log_level=3 \1"/g' /etc/default/grub
 	# Disable autodetection of services we don't need
-	sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="rd.lvm=0 rd.luks=0 rd.md=0 rd.dm=0 rd.multipath=0 rd.iscsi=0 rd.plymouth=0 rd.udev.log_priority=3 rd.udev.children-max=4 \1"/g' /etc/default/grub
+	sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="rd.lvm=0 rd.luks=0 rd.md=0 rd.dm=0 rd.multipath=0 rd.iscsi=0 rd.plymouth=0 rd.udev.log_priority=3 udev.children-max=255 rd.udev.children-max=255 nolvm rd.plymouth=0 plymouth.enable=0 \1"/g' /etc/default/grub
 
 	update-grub
 }
@@ -395,53 +213,20 @@ function remove_snapd {
 	dpkg -i amazon-ssm-agent.deb
 	rm amazon-ssm-agent.deb
 
-	systemctl enable amazon-ssm-agent
-
 	# https://bugs.launchpad.net/ubuntu/+source/systemd/+bug/1966203/comments/11
 	rm -rf /usr/lib/udev/rules.d/66-snapd-autoimport.rules
 
-	cat <<'EOF' >/etc/amazon/ssm/seelog.xml
-<outputs formatid="fmtinfo">
-   <console formatid="fmtinfo"/>
-   <rollingfile type="size" filename="/var/log/amazon/ssm/amazon-ssm-agent.log" maxsize="30000000" maxrolls="5"/>
-   <filter levels="error,critical" formatid="fmterror">
-      <rollingfile type="size" filename="/var/log/amazon/ssm/errors.log" maxsize="10000000" maxrolls="5"/>
-   </filter>
-</outputs>
-EOF
+	cp /tmp/seelog.xml /etc/amazon/ssm/seelog.xml
 
-}
-
-function systemd_resolved_override {
-	mkdir -p /etc/systemd/system/systemd-resolved.service.d
-	cat <<'EOF' >/etc/systemd/system/systemd-resolved.service.d/override.conf
-[Service]
-Environment=SYSTEMD_RESOLVED_SYNTHESIZE_HOSTNAME=0
-EOF
+	systemctl enable amazon-ssm-agent
 }
 
 function network_manager {
 	rm -f /lib/systemd/system/systemd-networkd-wait-online.service
-
 	systemctl disable systemd-networkd.service
 	systemctl mask systemd-networkd.service
-
 	apt install -y network-manager
-
 	mkdir -p /etc/network/if-up.d /etc/network/if-down.d
-
-	cat <<'EOF' >/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
-network: {config: disabled}
-EOF
-
-	cat <<'EOF' >/etc/cloud/cloud.cfg.d/99-ssh.cfg
-ssh_genkeytypes: [ed25519]
-allow_public_ssh_keys: true
-ssh_quiet_keygen: true
-no_ssh_fingerprints: true
-ssh:
-  emit_keys_to_console: false
-EOF
 
 	cat <<'EOF' >/etc/netplan/01-network-manager-all.yaml
 network:
@@ -461,33 +246,11 @@ EOF
 }
 
 function adjust_timesync {
-	cat <<'EOF' >/etc/chrony/chrony.conf
-# This directive specify the location of the file containing ID/key pairs for NTP authentication.
-keyfile /etc/chrony/chrony.keys
-# Record the rate at which the system clock gains/losses time.
-driftfile /var/lib/chrony/chrony.drift
-# Allow the system clock to be stepped in the first three updates if its offset is larger than 1 second.
-makestep 1.0 3
-# Stop bad estimates upsetting machine clock.
-maxupdateskew 100.0
-# Enable kernel synchronization of the real-time clock (RTC).
-rtcsync
-# Specify directory for log files.
-logdir /var/log/chrony
-# Select which information is logged.
-log measurements statistics tracking
-
-# https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-time.html
-# use link local ntp time
-server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4
-pool time.aws.com iburst
-
-EOF
+	cp /tmp/chrony.conf /etc/chrony/chrony.conf
 }
 
-function cache_apparmor_profiles {
-	echo "write-cache" >>/etc/apparmor/parser.conf
-	systemctl restart apparmor
+function disable_apparmor {
+	systemctl stop apparmor
 	systemctl disable apparmor
 }
 
@@ -501,13 +264,24 @@ ForwardToSyslog=no
 EOF
 }
 
+function remove_plymouth {
+	apt-get purge -y plymouth
+}
+
+function cloud_init {
+	cp /tmp/cloud-init.cfg /etc/cloud/cloud.cfg
+}
+
+function remove_openscsi {
+	apt-get purge -y open-iscsi
+}
+
 update_apt_sources
 install_packages
 install_git
 install_docker
 change_systemd_target
 disable_systemd_services
-systemd_resolved_override
 network_manager
 install_nodejs
 configure_locales
@@ -517,5 +291,8 @@ configure_git
 adjust_boot
 remove_snapd
 adjust_timesync
-cache_apparmor_profiles
+disable_apparmor
 adjust_journald
+remove_plymouth
+cloud_init
+remove_openscsi

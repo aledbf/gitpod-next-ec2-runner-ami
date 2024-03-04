@@ -107,6 +107,11 @@ build {
     source      = "${path.root}/devcontainer-seed-images.txt"
   }
 
+  provisioner "file" {
+    destination = "/tmp/"
+    source      = "${path.root}/config/"
+  }
+
   provisioner "shell" {
     inline = [
       "sudo bash -c 'chmod +x /tmp/scripts/*.sh'",
